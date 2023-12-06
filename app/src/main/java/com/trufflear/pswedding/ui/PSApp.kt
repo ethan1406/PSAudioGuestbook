@@ -10,18 +10,21 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.PermissionState
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import com.trufflear.pswedding.service.PlaybackService
 import com.trufflear.pswedding.ui.theme.PSTheme
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 @Preview("home screen")
 fun PSApp() {
@@ -34,29 +37,29 @@ fun PSApp() {
                 ),
             contentAlignment = Alignment.Center
         ) {
-            MediaButton(LocalContext.current)
+            val (isServiceRunning, setServiceRunning) = remember { mutableStateOf(false) }
+            val audioRecorderPermissionState = rememberPermissionState(android.Manifest.permission.RECORD_AUDIO)
+            val context = LocalContext.current
 
-
+            MediaButton(isServiceRunning) {
+                startAudioExperience(isServiceRunning, setServiceRunning, context, audioRecorderPermissionState)
+            }
         }
     }
 }
 
 @Composable
 fun MediaButton(
-    context: Context,
+    isServiceRunning: Boolean,
+    onButtonClick: () -> Unit
 ) {
-    var isServiceRunning by remember { mutableStateOf(false) }
-
     Button(
-        onClick = {
-            isServiceRunning = !isServiceRunning
-            handleButtonClick(isServiceRunning, context)
-        },
+        onClick = onButtonClick,
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isServiceRunning) {
-                Color.Green
-            } else {
                 Color.Red
+            } else {
+                Color.Green
             }
         )
     ) {
@@ -64,15 +67,23 @@ fun MediaButton(
     }
 }
 
-private fun handleButtonClick(
+@OptIn(ExperimentalPermissionsApi::class)
+private fun startAudioExperience(
     isServiceRunning: Boolean,
-    context: Context
+    setServiceRunning: (Boolean) -> Unit,
+    context: Context,
+    permissionState: PermissionState,
 ) {
-    val intent = Intent(context, PlaybackService::class.java)
-    if (isServiceRunning) {
-        Log.d("Compose", "start service")
-        context.startService(intent)
+    if (permissionState.status.isGranted) {
+        setServiceRunning(!isServiceRunning)
+        val intent = Intent(context, PlaybackService::class.java)
+        if (isServiceRunning) {
+            Log.d("Compose", "start service")
+            context.startService(intent)
+        } else {
+            context.stopService(intent)
+        }
     } else {
-        context.stopService(intent)
+        permissionState.launchPermissionRequest()
     }
 }

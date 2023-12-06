@@ -22,13 +22,8 @@ class PlaybackService @Inject constructor(): MediaSessionService() {
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
-        Log.d("testing 123", "service started")
-        val player = ExoPlayer.Builder(this).build()
-        val mediaSource = ProgressiveMediaSource.Factory { AssetDataSource(this) }
-            .createMediaSource(MediaItem.fromUri(Uri.parse("asset:///rain.mp3")))
-        player.setMediaSource(mediaSource)
 
-        mediaSession = MediaSession.Builder(this, player)
+        mediaSession = MediaSession.Builder(this, getMediaPlayer())
             .setCallback(
                 object : MediaSession.Callback {
                     override fun onMediaButtonEvent(
@@ -39,16 +34,23 @@ class PlaybackService @Inject constructor(): MediaSessionService() {
                         Log.d("testing 123", "button click received")
                         return true
                     }
-
-
                 }
             )
             .build()
     }
 
+    @OptIn(UnstableApi::class)
+    private fun getMediaPlayer(): ExoPlayer {
+        val player = ExoPlayer.Builder(this).build()
+        val mediaSource = ProgressiveMediaSource.Factory { AssetDataSource(this) }
+            .createMediaSource(MediaItem.fromUri(Uri.parse("asset:///rain.mp3")))
+        player.setMediaSource(mediaSource)
+        player.prepare()
+
+        return player
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("testing 123", "service start command")
-        mediaSession?.player?.prepare()
         mediaSession?.player?.play()
         return super.onStartCommand(intent, flags, startId)
     }
@@ -61,6 +63,7 @@ class PlaybackService @Inject constructor(): MediaSessionService() {
     // Remember to release the player and media session in onDestroy
     override fun onDestroy() {
         mediaSession?.run {
+            player.stop()
             player.release()
             release()
             mediaSession = null

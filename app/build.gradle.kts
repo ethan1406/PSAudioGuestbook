@@ -59,6 +59,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.5")
     implementation("androidx.compose.ui:ui-tooling-preview:1.5.4")
     debugImplementation("androidx.compose.ui:ui-tooling:1.5.4")
+    implementation("com.google.accompanist:accompanist-permissions:0.33.2-alpha")
 
     //hilt
     implementation("com.google.dagger:hilt-android:2.44")
