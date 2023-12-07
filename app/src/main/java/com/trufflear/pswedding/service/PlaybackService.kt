@@ -17,6 +17,7 @@ import javax.inject.Inject
 class PlaybackService @Inject constructor(): MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
+    private var didExperienceStart = false
 
     // Create your Player and MediaSession in the onCreate lifecycle event
     @OptIn(UnstableApi::class)
@@ -31,12 +32,25 @@ class PlaybackService @Inject constructor(): MediaSessionService() {
                         controllerInfo: MediaSession.ControllerInfo,
                         intent: Intent
                     ): Boolean {
-                        Log.d("testing 123", "button click received")
+                        Log.d("boagan", "button click received")
+                        handleExperience()
                         return true
                     }
                 }
             )
             .build()
+    }
+
+    private fun handleExperience() {
+        didExperienceStart = !didExperienceStart
+
+        mediaSession?.run {
+            if (didExperienceStart) {
+                player.play()
+            } else {
+                player.stop()
+            }
+        }
     }
 
     @OptIn(UnstableApi::class)

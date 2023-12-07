@@ -37,12 +37,12 @@ fun PSApp() {
                 ),
             contentAlignment = Alignment.Center
         ) {
-            val (isServiceRunning, setServiceRunning) = remember { mutableStateOf(false) }
+            val (didServiceStart, setServiceRunning) = remember { mutableStateOf(false) }
             val audioRecorderPermissionState = rememberPermissionState(android.Manifest.permission.RECORD_AUDIO)
             val context = LocalContext.current
 
-            MediaButton(isServiceRunning) {
-                startAudioExperience(isServiceRunning, setServiceRunning, context, audioRecorderPermissionState)
+            MediaButton(didServiceStart) {
+                startAudioExperience(didServiceStart, setServiceRunning, context, audioRecorderPermissionState)
             }
         }
     }
@@ -50,13 +50,13 @@ fun PSApp() {
 
 @Composable
 fun MediaButton(
-    isServiceRunning: Boolean,
+    didServiceStart: Boolean,
     onButtonClick: () -> Unit
 ) {
     Button(
         onClick = onButtonClick,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isServiceRunning) {
+            containerColor = if (didServiceStart) {
                 Color.Red
             } else {
                 Color.Green
@@ -69,20 +69,20 @@ fun MediaButton(
 
 @OptIn(ExperimentalPermissionsApi::class)
 private fun startAudioExperience(
-    isServiceRunning: Boolean,
+    didServiceStart: Boolean,
     setServiceRunning: (Boolean) -> Unit,
     context: Context,
     permissionState: PermissionState,
 ) {
     if (permissionState.status.isGranted) {
-        setServiceRunning(!isServiceRunning)
         val intent = Intent(context, PlaybackService::class.java)
-        if (isServiceRunning) {
+        if (didServiceStart) {
             Log.d("Compose", "start service")
-            context.startService(intent)
-        } else {
             context.stopService(intent)
+        } else {
+            context.startService(intent)
         }
+        setServiceRunning(!didServiceStart)
     } else {
         permissionState.launchPermissionRequest()
     }
