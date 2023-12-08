@@ -1,6 +1,7 @@
 package com.trufflear.pswedding.service
 
 import android.content.Intent
+import android.media.MediaRecorder
 import android.net.Uri
 import android.util.Log
 import androidx.annotation.OptIn
@@ -11,18 +12,35 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.trufflear.pswedding.util.Timer
+import dagger.hilt.android.AndroidEntryPoint
+import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
+enum class Experience {
+    Idle,
+    PSMessage,
+    Recording;
+}
 
+@AndroidEntryPoint
 class PlaybackService @Inject constructor(): MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
-    private var didExperienceStart = false
+    private var experience = Experience.Idle
+    private var mediaRecorder: MediaRecorder? = null
+
+    private lateinit var baseFile: File
 
     // Create your Player and MediaSession in the onCreate lifecycle event
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
+        baseFile = File(filesDir, "guestRecordings")
 
         mediaSession = MediaSession.Builder(this, getMediaPlayer())
             .setCallback(
@@ -33,22 +51,90 @@ class PlaybackService @Inject constructor(): MediaSessionService() {
                         intent: Intent
                     ): Boolean {
                         Log.d("boagan", "button click received")
-                        handleExperience()
+                        updateExperience()
+                        handleExperience(experience)
                         return true
                     }
                 }
             )
             .build()
+
+        mediaRecorder = MediaRecorder(this)
+
+        startPlayer("rain")
     }
 
-    private fun handleExperience() {
-        didExperienceStart = !didExperienceStart
+    private fun getRecordingPath(): File {
+        if (baseFile.exists().not()) {
+            if (baseFile.mkdir().not()) {
+                Log.e("boagan", "file failed to create")
+            }
+        }
+        return File(baseFile, "${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.mp4")
+    }
 
-        mediaSession?.run {
-            if (didExperienceStart) {
-                player.play()
-            } else {
-                player.stop()
+    private fun handleExperience(experience: Experience) {
+        when (experience) {
+            Experience.PSMessage -> {
+                startPlayer("river")
+                setMediaRecorder()
+            }
+            Experience.Recording -> {
+                mediaSession?.player?.pause()
+                startRecording()
+            }
+            Experience.Idle -> {
+                recordAndReset()
+                Log.i("boagan", "successfully recordeded ")
+                startPlayer("rain")
+            }
+        }
+    }
+
+    private fun updateExperience() {
+        experience = when (experience) {
+            Experience.Idle -> Experience.PSMessage
+            Experience.PSMessage -> Experience.Recording
+            Experience.Recording -> Experience.Idle
+        }
+    }
+
+    private fun setMediaRecorder() {
+        mediaRecorder?.run {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            setOutputFile(getRecordingPath())
+            setAudioEncoder(MediaRecorder.AudioEncoder.HE_AAC)
+            setAudioEncodingBitRate(16 * 44100)
+            setAudioSamplingRate(44100)
+            setMaxDuration(10_000) // 60 seconds
+
+            setOnInfoListener { _, what, _ ->
+                if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
+                    Log.d("boagan","Maximum Duration Reached and video saved")
+                    if (experience == Experience.Recording) {
+                        updateExperience()
+                        handleExperience(experience)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun startRecording() =
+        mediaRecorder?.run {
+            try {
+                prepare()
+                start()
+            } catch (e: IOException) {
+                Log.e("boagan", "media recorder starting failed")
+            }
+        }
+    private fun recordAndReset() {
+        if (experience == Experience.Idle) {
+            mediaRecorder?.run {
+                stop()
+                reset()
             }
         }
     }
@@ -59,15 +145,18 @@ class PlaybackService @Inject constructor(): MediaSessionService() {
         val mediaSource = ProgressiveMediaSource.Factory { AssetDataSource(this) }
             .createMediaSource(MediaItem.fromUri(Uri.parse("asset:///rain.mp3")))
         player.setMediaSource(mediaSource)
-        player.prepare()
+        player.repeatMode = ExoPlayer.REPEAT_MODE_ONE
 
         return player
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        mediaSession?.player?.play()
-        return super.onStartCommand(intent, flags, startId)
-    }
+    private fun startPlayer(filename: String) =
+        mediaSession?.player?.run {
+            setMediaItem(MediaItem.fromUri(Uri.parse("asset:///$filename.mp3")))
+            seekTo(0)
+            prepare()
+            play()
+        }
 
     // This example always accepts the connection request
     override fun onGetSession(
@@ -81,6 +170,11 @@ class PlaybackService @Inject constructor(): MediaSessionService() {
             player.release()
             release()
             mediaSession = null
+        }
+        mediaRecorder?.run {
+            reset()
+            release()
+            mediaRecorder = null
         }
         super.onDestroy()
     }

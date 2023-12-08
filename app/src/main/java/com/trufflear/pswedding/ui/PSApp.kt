@@ -74,10 +74,10 @@ private fun startAudioExperience(
     context: Context,
     permissionState: PermissionState,
 ) {
+    Log.d("boagan", "audio experience")
     if (permissionState.status.isGranted) {
         val intent = Intent(context, PlaybackService::class.java)
         if (didServiceStart) {
-            Log.d("Compose", "start service")
             context.stopService(intent)
         } else {
             context.startService(intent)
