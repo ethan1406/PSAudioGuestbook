@@ -6,13 +6,13 @@ import android.net.Uri
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.AssetDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import com.trufflear.pswedding.util.Timer
 import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
 import java.io.IOException
@@ -51,17 +51,21 @@ class PlaybackService @Inject constructor(): MediaSessionService() {
                         intent: Intent
                     ): Boolean {
                         Log.d("boagan", "button click received")
-                        updateExperience()
-                        handleExperience(experience)
+                        if (experience != Experience.PSMessage) {
+                            updateExperience()
+                            handleExperience(experience)
+                        }
                         return true
                     }
+
+
                 }
             )
             .build()
 
         mediaRecorder = MediaRecorder(this)
 
-        startPlayer("rain")
+        startPlayer("silence", true)
     }
 
     private fun getRecordingPath(): File {
@@ -76,7 +80,7 @@ class PlaybackService @Inject constructor(): MediaSessionService() {
     private fun handleExperience(experience: Experience) {
         when (experience) {
             Experience.PSMessage -> {
-                startPlayer("river")
+                startPlayer("PSRecording", false)
                 setMediaRecorder()
             }
             Experience.Recording -> {
@@ -86,7 +90,7 @@ class PlaybackService @Inject constructor(): MediaSessionService() {
             Experience.Idle -> {
                 recordAndReset()
                 Log.i("boagan", "successfully recordeded ")
-                startPlayer("rain")
+                startPlayer("silence", true)
             }
         }
     }
@@ -143,17 +147,37 @@ class PlaybackService @Inject constructor(): MediaSessionService() {
     private fun getMediaPlayer(): ExoPlayer {
         val player = ExoPlayer.Builder(this).build()
         val mediaSource = ProgressiveMediaSource.Factory { AssetDataSource(this) }
-            .createMediaSource(MediaItem.fromUri(Uri.parse("asset:///rain.mp3")))
+            .createMediaSource(MediaItem.fromUri(Uri.parse("asset:///silence.mp3")))
         player.setMediaSource(mediaSource)
         player.repeatMode = ExoPlayer.REPEAT_MODE_ONE
+
+        player.addListener(
+            object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == ExoPlayer.STATE_ENDED) {
+                        if (experience == Experience.PSMessage) {
+                            updateExperience()
+                            handleExperience(experience)
+                        }
+                    }
+                }
+            }
+        )
 
         return player
     }
 
-    private fun startPlayer(filename: String) =
+    private fun startPlayer(filename: String, shouldRepeat: Boolean) =
         mediaSession?.player?.run {
             setMediaItem(MediaItem.fromUri(Uri.parse("asset:///$filename.mp3")))
             seekTo(0)
+
+            repeatMode = if (shouldRepeat) {
+                ExoPlayer.REPEAT_MODE_ONE
+            } else {
+                ExoPlayer.REPEAT_MODE_OFF
+            }
+
             prepare()
             play()
         }
